@@ -288,7 +288,7 @@ const DisplayShowDetailsModal = (data) => {
                     <div class="genres mt-3">                    
                     </div>
                   </div>
-                  <div class="col-md-7 modal-show-info bg-dark text-white pt-3">
+                  <div class="col-md-7 modal-show-info bg-dark text-white p-3">
                       <b>Status:</b> ${(data.status != null) ? status : "No Status Available"}
                       <hr/>
                       <b>Language:</b> ${(data.language != null) ? data.language : "No Language Available"}
