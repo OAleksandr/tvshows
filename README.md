@@ -1,4 +1,4 @@
-# TV Shows
+# <img src="img/multimedia.png" width="25" height="25"> TV Shows
 
 ### API provided by:
 
