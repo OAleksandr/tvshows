@@ -1,0 +1,170 @@
+body
+{
+    background-image: radial-gradient( circle farthest-corner at 1.3% 2.8%,  rgba(239,249,249,1) 0%, rgba(182,199,226,1) 100.2% );
+    overflow-x: hidden;
+}
+
+.hidden
+{
+    display: none;
+}
+
+body .section-shows .header-container
+{
+    background-color: white;
+    padding: 20px 20px 20px 20px;
+    box-shadow: rgba(50, 50, 93, 0.25) 0px 13px 27px -5px, rgba(0, 0, 0, 0.3) 0px 8px 16px -8px;
+    background-image: radial-gradient( circle farthest-corner at 18.7% 37.8%,  rgba(250,250,250,1) 0%, rgba(225,234,238,1) 90% );
+}
+body .section-shows .header-container .popular-header
+{
+    margin-bottom: 20px;
+}
+.section-shows .header-container .popular-star
+{
+    color: #f8ce0b;
+    font-size: 32px;
+}
+
+.slick-slide
+{
+    height: auto;
+}
+.section-shows .header-container .shows a,
+.section-shows-list .show-list-container .show-list .card-show-list a 
+{
+    text-decoration: none;
+    color: black;
+}
+.section-shows .header-container .shows .card
+{
+    width: 95% !important;
+    box-shadow: rgba(0, 0, 0, 0.16) 0px 3px 6px, rgba(0, 0, 0, 0.23) 0px 3px 6px;
+    margin-bottom: 10px;
+}
+
+.section-shows .header-container .shows .card img
+{
+    height: 45%;
+}
+
+/* Stars */
+.section-shows .header-container .shows .card a .stars-outer
+{
+    position: relative;
+    display: inline-block;
+}
+.section-shows .header-container .shows .card a .stars-inner
+{
+    position: absolute;
+    top: 0;
+    left: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    width: 0;
+}
+
+.section-shows .header-container .shows .card a .stars-outer::before
+{
+    content: "\2605 \2605 \2605 \2605 \2605 \2605 \2605 \2605 \2605 \2605";
+    font-weight: 950;
+    color: #ccc;
+}
+
+.section-shows .header-container .shows .card a .stars-inner::before
+{
+    content: "\2605 \2605 \2605 \2605 \2605 \2605 \2605 \2605 \2605 \2605";
+    font-weight: 950;
+    color: #f8ce0b;
+}
+/* end stars */
+
+.section-search, .section-shows-list
+{
+    margin-top: 50px;
+}
+
+.section-search .search-container
+{
+    background-color: white;
+    padding: 40px 20px 20px 20px;
+    box-shadow: rgba(50, 50, 93, 0.25) 0px 13px 27px -5px, rgba(0, 0, 0, 0.3) 0px 8px 16px -8px;
+    background-image: radial-gradient( circle farthest-corner at 18.7% 37.8%,  rgba(250,250,250,1) 0%, rgba(225,234,238,1) 90% );
+}
+
+.toast-warning-icon, .toast-title
+{
+    color: orange;
+}
+.toast-success
+{
+    border-color: chartreuse;
+}
+.toast-success .toast-header .toast-title, 
+.toast-success .toast-header .toast-success-icon
+{
+    color: green;
+}
+.toast-warning
+{
+    border-color: orange;
+}
+
+.section-shows-list .show-list-container .show-list .card-show-list
+{
+    margin-left: 10px;
+    margin-bottom: 30px;
+    box-shadow: rgba(0, 0, 0, 0.24) 0px 3px 8px;
+    background-image: radial-gradient( circle 592px at 48.2% 50%,  rgba(255,255,249,0.6) 0%, rgba(160,199,254,1) 74.6% );
+}
+
+.section-modal-details .modal-details .modal-title
+{
+    text-transform: uppercase;
+}
+.section-modal-details .modal-details .genres .rounded-pill
+{
+    box-shadow: rgba(0, 0, 0, 0.15) 1.95px 1.95px 2.6px;
+    border: 1px solid black;
+}
+.section-modal-details .modal-details .modal-show-info .badge
+{
+    border: 1px solid black;
+}
+.section-modal-details .modal-details .genres .rounded-pill:nth-child(2)
+{
+    margin-left: 5px;
+    margin-right: 5px;   
+}
+
+.section-modal-details .modal .accordion-button::after
+{
+    background-color: rgba(145, 226, 64, 0.664);
+    border-radius: 5px;
+}
+
+.section-favorites-offcanvas .offcanvas-card .card:hover
+{
+    box-shadow: rgba(0, 0, 0, 0.4) 0px 2px 4px, rgba(0, 0, 0, 0.3) 0px 7px 13px -3px, rgba(0, 0, 0, 0.2) 0px -3px 0px inset;
+}
+.section-favorites-offcanvas .offcanvas
+{
+    background-image: radial-gradient( circle farthest-corner at 1.3% 2.8%,  rgba(239,249,249,1) 0%, rgba(182,199,226,1) 100.2% );
+}
+.section-trailers
+{
+    margin-top: 50px;
+}
+
+.preloader
+{
+    background: rgb(250, 251, 252, 1);
+    height: 101vh;
+    width: 100%;
+    position: fixed;
+    z-index: 100;
+    margin-top: -60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
