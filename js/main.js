@@ -669,8 +669,8 @@ const RunToast = (() => {
 });
 
 let preloader = document.querySelector(".preloader");
-window.addEventListener("load", () => {
-  preloader.style.display = "none";
+window.addEventListener("load", () => {  
+  setTimeout(function(){ preloader.style.display = "none"; }, 1000);
 })
   
 

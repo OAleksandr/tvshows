@@ -159,11 +159,11 @@ body .section-shows .header-container .popular-header
 .preloader
 {
     background: rgb(250, 251, 252, 1);
-    height: 120vh;
+    height: 100vh;
     width: 100%;
     position: fixed;
     z-index: 100;
-    margin-top: -60px;
+    margin-top: -54px;
     display: flex;
     align-items: center;
     justify-content: center;
