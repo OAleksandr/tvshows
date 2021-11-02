@@ -580,7 +580,7 @@ const ShowImagesCarousel = async (id) => {
     if(showImagesData != null && showImagesData.length > 0)
     {
       let pos = 0;
-      console.log(showImagesData);
+      //console.log(showImagesData);
       showImagesContainer.innerHTML = `
             <div id="carouselImagesIndicators" class="carousel slide" data-bs-ride="carousel">
               
