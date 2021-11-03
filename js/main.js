@@ -251,7 +251,7 @@ const DisplayShowDetailsModal = (data) => {
     let schedule = data.schedule;
     let country = (data.network != null) ? data.network.country.name : null;
     let countryCode = (data.network != null) ? data.network.country.code : null;
-
+  
     if(showImage == null)
     {
       showImage = "/img/no-img-available.png";
@@ -299,7 +299,7 @@ const DisplayShowDetailsModal = (data) => {
                       <hr/>
                       <b>Runtime:</b> ${(data.runtime != null) ? data.runtime + " min" : "No Runtime Available"}
 
-                      ${(country != null) ? `<hr/><b>Country:</b> <img src="http://www.geognos.com/api/en/countries/flag/${countryCode}.png" style="width:30px;"/> ${country}` : ""}
+                      ${(country != null) ? `<hr/><b>Country:</b> <img src="https://flagcdn.com/w160/${countryCode.toLowerCase()}.png" style="width:30px;"/> ${country}` : ""}
                       ${(data.officialSite != null) ? `<hr/><b>Official Site:</b> <a href="${data.officialSite}" target="_blank"><i class="bi bi-arrow-up-right-square-fill"></i><a/>` : ""}
                   </div>
                   <div class="col-md-12 mt-3 schedule-accordion">
