@@ -1,195 +1,158 @@
-
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="css/lib/bootstrap.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Browse popular TV shows, search the TVmaze catalogue and keep a list of your favorites.">
+    <meta name="theme-color" content="#212529">
+    <title>TV Shows</title>
+    <link rel="icon" type="image/png" href="img/multimedia.png">
+    <link rel="stylesheet" href="css/lib/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="css/lib/slick.css">
     <link rel="stylesheet" href="css/lib/slick-theme.css">
     <link rel="stylesheet" href="css/main.css">
-    <link rel="icon" type="image/png" href="img/multimedia.png"/>
-    <title>TVShows</title>
 </head>
 
 <body>
-    <header>
-        <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-            <div class="container">
-              <a class="navbar-brand" href="index.html"><i class="bi bi-film"></i></a>                       
-              <button type="button" id="notification-btn" class="btn btn-dark hidden" data-bs-toggle="offcanvas" data-bs-target="#offcanvasFavorites" aria-controls="offcanvasFavorites">
-                Favorites <span class="badge bg-danger notification-count"></span>
-              </button>
-            </div>
-          </nav>
-    </header>
-    <div class="preloader">
-        <button class="btn btn-primary" type="button" disabled>
-            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-            Loading
-            <span class="spinner-grow spinner-grow-sm" role="status" style="font-size: 10px;" aria-hidden="true"></span>
-            <span class="spinner-grow spinner-grow-sm" role="status" aria-hidden="true"></span>
-            <span class="spinner-grow spinner-grow-sm" role="status" aria-hidden="true"></span>
-        </button>
+    <a class="visually-hidden-focusable skip-link" href="#main">Skip to content</a>
+
+    <div class="preloader" role="status" aria-live="polite">
+        <div class="preloader-inner">
+            <i class="bi bi-film preloader-logo" aria-hidden="true"></i>
+            <div class="spinner-border text-success" aria-hidden="true"></div>
+            <span class="visually-hidden">Loading…</span>
+        </div>
     </div>
-    <section class="section-shows">   
-        <div class="container-fluid header-container"> 
-            <h3 class="popular-header">
-                <span class="badge bg-success">P</span>
-                <span class="badge bg-success">O</span>
-                <span class="badge bg-success">P</span>
-                <span class="badge bg-success">U</span>
-                <span class="badge bg-success">L</span>
-                <span class="badge bg-success">A</span>
-                <span class="badge bg-success">R</span>
-                <span class="popular-star"><i class="bi bi-star-half"></i></span>
-            </h3>
-            <div class="shows">
-                 
-            </div>
-        </div>       
-    </section>
 
-    <section class="section-search">
-        <div class="container search-container">
-        <div class="messages"></div>
-        <div class="search-options-container d-flex justify-content-start" style="margin-bottom: 10px;">
-            <div class="form-check" style="margin-right: 20px;">
-                <input class="form-check-input" type="radio" name="search-options" id="singleSearch" value="single">
-                <label class="form-check-label" for="singleSearch">
-                  Single search
-                </label>
-              </div>
-              <div class="form-check">
-                <input class="form-check-input" type="radio" name="search-options" id="multipleSearch" value="multiple" checked>
-                <label class="form-check-label" for="multipleSearch">
-                  Multiple search
-                </label>
-              </div>
-        </div>
-           <form>
-                <div class="input-group mb-3">
-                    <span class="input-group-text"><i class="bi bi-search"></i></span>
-                    <input type="text" class="form-control" name="search-input" id="search-input" placeholder="tee">
-                    <button class="btn btn-outline-success" type="submit" id="search">Search</button>
-                    <button class="btn btn-outline-danger hidden" type="submit" id="clear-search">Clear</button>
+    <header class="sticky-top">
+        <nav class="navbar navbar-dark bg-dark shadow-sm">
+            <div class="container">
+                <a class="navbar-brand d-flex align-items-center gap-2" href="./">
+                    <i class="bi bi-film" aria-hidden="true"></i>
+                    <span>TV Shows</span>
+                </a>
+                <button type="button" id="notification-btn" class="btn btn-outline-light hidden"
+                        data-bs-toggle="offcanvas" data-bs-target="#offcanvasFavorites" aria-controls="offcanvasFavorites">
+                    <i class="bi bi-heart-fill text-danger" aria-hidden="true"></i>
+                    <span class="d-none d-sm-inline ms-1">Favorites</span>
+                    <span class="badge rounded-pill bg-danger ms-1 notification-count"></span>
+                    <span class="visually-hidden">favorite shows</span>
+                </button>
+            </div>
+        </nav>
+    </header>
+
+    <main id="main">
+        <section class="section-shows" aria-labelledby="popular-heading">
+            <div class="container-fluid header-container">
+                <h2 class="popular-header" id="popular-heading" aria-label="Popular">
+                    <span aria-hidden="true">
+                        <span class="badge bg-success">P</span><span class="badge bg-success">O</span><span class="badge bg-success">P</span><span class="badge bg-success">U</span><span class="badge bg-success">L</span><span class="badge bg-success">A</span><span class="badge bg-success">R</span>
+                        <span class="popular-star"><i class="bi bi-star-half"></i></span>
+                    </span>
+                </h2>
+                <div class="shows"></div>
+            </div>
+        </section>
+
+        <section class="section-search" aria-labelledby="search-heading">
+            <div class="container">
+                <div class="search-container panel">
+                    <h2 class="section-title" id="search-heading"><i class="bi bi-search" aria-hidden="true"></i> Find a show</h2>
+                    <form id="search-form" role="search" novalidate>
+                        <fieldset class="search-options-container d-flex flex-wrap gap-3 mb-3">
+                            <legend class="visually-hidden">Search mode</legend>
+                            <div class="form-check mb-0">
+                                <input class="form-check-input" type="radio" name="search-options" id="singleSearch" value="single">
+                                <label class="form-check-label" for="singleSearch">Best match only</label>
+                            </div>
+                            <div class="form-check mb-0">
+                                <input class="form-check-input" type="radio" name="search-options" id="multipleSearch" value="multiple" checked>
+                                <label class="form-check-label" for="multipleSearch">All matches</label>
+                            </div>
+                        </fieldset>
+                        <label for="search-input" class="visually-hidden">Show name</label>
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text"><i class="bi bi-search" aria-hidden="true"></i></span>
+                            <input type="search" class="form-control" name="search-input" id="search-input"
+                                   placeholder="Search for a TV show" autocomplete="off" enterkeyhint="search">
+                            <button class="btn btn-success" type="submit" id="search">
+                                <span class="spinner-border spinner-border-sm me-1 hidden" aria-hidden="true"></span>
+                                Search
+                            </button>
+                            <button class="btn btn-outline-danger hidden" type="button" id="clear-search" aria-label="Clear search results">
+                                <i class="bi bi-x-lg" aria-hidden="true"></i><span class="d-none d-sm-inline ms-1">Clear</span>
+                            </button>
+                        </div>
+                    </form>
                 </div>
-           </form>
-        </div>
-    </section>
+            </div>
+        </section>
 
-    <section class="section-trailers">
-        <div class="container ">
-            <div class="row ">
-                <div class="col-md-12 d-flex justify-content-center trailer-iframe">
-                    <iframe id="trailer" width="560" height="315" src="" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+        <section class="section-shows-list" aria-live="polite">
+            <div class="container show-list-container">
+                <h2 class="section-title results-title hidden"></h2>
+                <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3 g-md-4 show-list"></div>
+            </div>
+        </section>
+
+        <section class="section-trailers" aria-labelledby="trailer-heading">
+            <div class="container">
+                <div class="trailer-wrapper mx-auto">
+                    <h2 class="section-title" id="trailer-heading"><i class="bi bi-play-btn" aria-hidden="true"></i> Featured trailer</h2>
+                    <div class="ratio ratio-16x9 trailer-iframe">
+                        <iframe id="trailer" title="Featured trailer" loading="lazy"
+                                allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container d-flex flex-column flex-sm-row justify-content-between align-items-center gap-2">
+            <span><i class="bi bi-film" aria-hidden="true"></i> TV Shows</span>
+            <span>Data provided by <a href="https://www.tvmaze.com/api" target="_blank" rel="noopener">TVmaze</a></span>
+        </div>
+    </footer>
+
+    <!-- Show details modal (content filled in by js/main.js) -->
+    <div class="modal fade section-modal-details" id="detail" tabindex="-1" aria-labelledby="detail-title" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg modal-fullscreen-sm-down">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title h5" id="detail-title"></h2>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body modal-details"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-light" id="add-to-favorite" value="add"></button>
                 </div>
             </div>
         </div>
-    </section>
+    </div>
 
-    <section class="section-shows-list">
-        <div class="container show-list-container">
-            <div class="row show-list">
-                
-            </div>
-        </div>       
-    </section>
-
-    <section class="section-modal-details">
-        <div class="modal-details container"></div>
-        
-    </section>
-
-    <section class="section-favorites-offcanvas">
-      <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasFavorites" aria-labelledby="offcanvasFavoritesLabel">
-        <div class="offcanvas-header d-flex justify-content-between bg-dark text-white">
-          <h5 class="offcanvas-title" id="offcanvasFavoritesLabel">Your Favorite Show(s)</h5>
-          <button type="button" class="btn btn-danger clear-fav-list">Clear List</button>
-          <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" style="color:red;" aria-label="Close"></button>
+    <!-- Favorites -->
+    <div class="offcanvas offcanvas-start section-favorites-offcanvas" tabindex="-1" id="offcanvasFavorites" aria-labelledby="offcanvasFavoritesLabel">
+        <div class="offcanvas-header bg-dark text-white">
+            <h2 class="offcanvas-title h5" id="offcanvasFavoritesLabel"><i class="bi bi-heart-fill text-danger" aria-hidden="true"></i> Your favorites</h2>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
         </div>
         <div class="offcanvas-body">
-          <div class="container">
-              <div class="row">
-                  <div class="col-sm-12 offcanvas-card">                   
-                  </div>
-              </div>
-          </div>
+            <ul class="list-unstyled offcanvas-card mb-3"></ul>
+            <button type="button" class="btn btn-outline-danger w-100 clear-fav-list"><i class="bi bi-trash" aria-hidden="true"></i> Clear list</button>
         </div>
-      </div>
-    </section>
-    
+    </div>
 
-    <!--SECTION SCRIPTS-->
+    <!-- Toast notifications -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3 messages" aria-live="polite" aria-atomic="false"></div>
+
     <script src="js/lib/bootstrap.bundle.min.js"></script>
-    <script src="js/main.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" integrity="sha512-894YE6QWD5I59HgZOGReFYm4dnWc1Qt5NtvYSaNcOP+u1T9qYdvdihz0PPSiiqn/+/3e7Jo4EaG7TubfWGUrMQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="js/lib/slick.js"></script>
-    
-    <script>
-          window.onload = () => {
-            $('.shows').slick({
-           dots: true,            
-           slidesToShow: 5,        
-           infinite: true,
-           autoplay: true,
-           arrows: true,
-           centerMode: true,
-           speed: 950,
-           responsive: [
-           {
-                   breakpoint: 1580,
-                   settings: {
-                       arrows: true,
-                       centerMode: true,
-                       centerPadding: '40px',
-                       slidesToShow: 4,
-                       dots: true                     
-                   }
-               },
-               {
-                   breakpoint: 1150,
-                   settings: {
-                       arrows: true,
-                       centerMode: true,
-                       centerPadding: '40px',
-                       slidesToShow: 2,
-                       dots: true                     
-                   }
-               },
-               {
-                   breakpoint: 768,
-                   settings: {
-                       arrows: true,
-                       centerMode: true,
-                       centerPadding: '40px',
-                       slidesToShow: 3                    
-                   }
-               },
-               {
-                   breakpoint: 480,
-                   settings: {
-                       arrows: true,
-                       centerMode: true,
-                       centerPadding: '40px',
-                       slidesToShow: 1,
-                       dots: false                     
-                   }
-               },
-               {
-                   breakpoint: 380,
-                   settings: {
-                       arrows: true,
-                       centerMode: true,
-                       centerPadding: '40px',
-                       slidesToShow: 1,
-                       dots: false                     
-                   }
-               }
-           ]
-       });
-          }
-    </script>  
+    <script src="js/main.js"></script>
 </body>
 </html>

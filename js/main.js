@@ -1,676 +1,545 @@
-var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-  return new bootstrap.Tooltip(tooltipTriggerEl)
-})
-/*---------------------------------------------------------------------------------------------------------*/
-let showsHeaderContainer = document.querySelector(".header-container .shows");
-let showsList = document.querySelector(".show-list-container .show-list");
+"use strict";
+
+/*---------------------------------------------------------------------------------------------------------
+  Config & DOM references
+---------------------------------------------------------------------------------------------------------*/
+const API = "https://api.tvmaze.com";
+const FAV_KEY = "fav";
+const NO_IMAGE = "img/no-img-available.png"; // relative so it also works on GitHub Pages (/tvshows/)
+const POPULAR_COUNT = 10;
+
+const showsHeaderContainer = document.querySelector(".header-container .shows");
+const showsList = document.querySelector(".show-list-container .show-list");
+const resultsTitle = document.querySelector(".results-title");
+const searchForm = document.querySelector("#search-form");
 const searchValue = document.querySelector("#search-input");
 const searchBTN = document.querySelector("#search");
-let messages = document.querySelector(".messages");
+const clearBTN = document.querySelector("#clear-search");
+const messages = document.querySelector(".messages");
+const modalEl = document.querySelector("#detail");
+const modalTitle = document.querySelector("#detail-title");
+const modalBody = document.querySelector(".modal-details");
+const addToFavoriteBTN = document.querySelector("#add-to-favorite");
+const offcanvasEl = document.querySelector("#offcanvasFavorites");
+const preloader = document.querySelector(".preloader");
 
+const detailModal = new bootstrap.Modal(modalEl);
+let currentShow = null;
 
-const LoadShowsData = async () => {
-  //const TVMAZE_EPISODES_ENDP = "https://api.tvmaze.com/shows/2/episodes";
-  const TVMAZE_SHOWS = "https://api.tvmaze.com/shows";
+/*---------------------------------------------------------------------------------------------------------
+  Helpers
+---------------------------------------------------------------------------------------------------------*/
+const escapeHTML = (value) =>
+  String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-  try
-  {
-      const res = await fetch(TVMAZE_SHOWS);
-      const showsData = await res.json();
-      DisplayShowsData(showsData);
+// Plain text version of an HTML summary (used for card excerpts)
+const stripHTML = (html) => new DOMParser().parseFromString(html || "", "text/html").body.textContent.trim();
+
+// Keep only a few harmless formatting tags from API-provided HTML
+const sanitizeHTML = (html) => {
+  const allowed = new Set(["P", "B", "STRONG", "I", "EM", "BR", "UL", "OL", "LI"]);
+  const doc = new DOMParser().parseFromString(html || "", "text/html");
+  const clean = (node) => {
+    [...node.childNodes].forEach((child) => {
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        clean(child);
+        if (allowed.has(child.tagName)) {
+          [...child.attributes].forEach((a) => child.removeAttribute(a.name));
+        } else {
+          child.replaceWith(...child.childNodes);
+        }
+      } else if (child.nodeType !== Node.TEXT_NODE) {
+        child.remove();
+      }
+    });
+  };
+  clean(doc.body);
+  return doc.body.innerHTML;
+};
+
+const safeUrl = (url) => {
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" || u.protocol === "http:" ? u.href : null;
+  } catch {
+    return null;
   }
-  catch(err)
-  {
-      console.error(err);
+};
 
-      DisplayError(err);
+const shuffle = (arr) => {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
   }
-}
-LoadShowsData();
+  return a;
+};
 
+const fetchJSON = async (url) => {
+  const res = await fetch(url);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  return res.json();
+};
+
+const starsHTML = (rating) => {
+  if (rating == null) return `<span class="rating rating-none">No rating</span>`;
+  const percent = Math.round(((rating / 10) * 100) / 5) * 5;
+  return `
+    <span class="rating" title="Rated ${rating} out of 10">
+      <span class="stars-outer" aria-hidden="true"><span class="stars-inner" style="width:${percent}%"></span></span>
+      <span class="rating-value">${rating}</span>
+      <span class="visually-hidden">Rated ${rating} out of 10</span>
+    </span>`;
+};
+
+/*---------------------------------------------------------------------------------------------------------
+  Notifications
+---------------------------------------------------------------------------------------------------------*/
+const TOAST_STYLES = {
+  success: { icon: "bi-check-circle-fill", title: "Success" },
+  warning: { icon: "bi-exclamation-triangle-fill", title: "Warning" },
+  danger: { icon: "bi-x-circle-fill", title: "Error" },
+};
+
+// `message` must already be escaped / trusted HTML
+const ShowToast = (type, message) => {
+  const style = TOAST_STYLES[type] || TOAST_STYLES.warning;
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${type}`;
+  toast.setAttribute("role", type === "danger" ? "alert" : "status");
+  toast.innerHTML = `
+    <div class="toast-header">
+      <i class="bi ${style.icon} toast-icon me-2" aria-hidden="true"></i>
+      <strong class="me-auto toast-title">${style.title}</strong>
+      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+    <div class="toast-body">${message}</div>`;
+  messages.appendChild(toast);
+  toast.addEventListener("hidden.bs.toast", () => toast.remove());
+  new bootstrap.Toast(toast, { animation: true, delay: 6000, autohide: true }).show();
+};
+
+const DisplayError = (err) => {
+  console.error(err);
+  const msg = err instanceof TypeError ? "Network error — please check your connection and try again." : err.message || String(err);
+  ShowToast("danger", escapeHTML(msg));
+};
+
+/*---------------------------------------------------------------------------------------------------------
+  Popular shows slider
+---------------------------------------------------------------------------------------------------------*/
+const InitSlider = () => {
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  $(showsHeaderContainer).slick({
+    dots: true,
+    arrows: true,
+    infinite: true,
+    autoplay: !reduceMotion,
+    autoplaySpeed: 4000,
+    pauseOnHover: true,
+    pauseOnFocus: true,
+    centerMode: true,
+    centerPadding: "60px",
+    slidesToShow: 5,
+    speed: 700,
+    responsive: [
+      { breakpoint: 1400, settings: { slidesToShow: 4 } },
+      { breakpoint: 1100, settings: { slidesToShow: 3 } },
+      { breakpoint: 768, settings: { slidesToShow: 2, centerPadding: "40px" } },
+      { breakpoint: 520, settings: { slidesToShow: 1, centerPadding: "56px", dots: false } },
+    ],
+  });
+};
 
 const DisplayShowsData = (shows) => {
- if(shows.length > 0)
- {
-    let popularShows = shows.filter(s => s.rating != null && s.rating.average > 8);
-    let randomShows = popularShows.sort(() => Math.random() - Math.random()).slice(0, 7);
-    let placeHolderVal = shows.sort(() => Math.random() - Math.random()).slice(0, 1);
-    
-    searchValue.placeholder = placeHolderVal[0].name; 
+  const popular = shows.filter((s) => s.rating?.average > 8 && s.image);
+  const randomShows = shuffle(popular).slice(0, POPULAR_COUNT);
+  const placeholderShow = shuffle(shows)[0];
 
-    randomShows.map((i) => {
-      //console.log(i);
-      
-      let originalImage = i.image.original;
-      let summary = i.summary;
-      //let trimmedSummary = summary.substr(0, 50);
-      let showName = i.name;
-      let trimmedShowName = showName.substr(0, 10) + "...";
-      let rating = i.rating.average;
-      let showId = i.id;
-      let showNameClass = showName.replace(/\s/g, "-")
-                                  .replace(":", "")
-                                  .replace("'", "")
-                                  .replace(/\./g, "")
-                                  .replace(/[0-9]/g, "N")
-                                  .replace("!", "")
-                                  .replace("&", "and");                                       
+  if (placeholderShow) searchValue.placeholder = `e.g. ${placeholderShow.name}`;
 
-      //Get rating percentage
-      const starsTotal = 10;
-      const starsPercentage = (rating / starsTotal) * 100;
-
-      //Round percentage
-      const starsRounded = Math.round(starsPercentage / 5) * 5;
-      
-      showsHeaderContainer.innerHTML += `   
-            <div class="card show-d-${showId}" style="width: 18rem;">
-              <a href="#">
-                  <img src="${originalImage}" class="card-img-top" alt="...">
-                  <div class="card-body d-flex justify-content-between">
-                    <b>${(showName.length < 14) ? showName : trimmedShowName}</b>
-                    <b class="stars-outer">
-                        <b class="${showNameClass} stars-inner"></b>
-                    </b>
-                  </div>
-              </a>  
-            </div>         
-      `;
-      
-      document.querySelector(`.${showNameClass}.stars-inner`).style.width = starsRounded + "%";     
-    });//END SHOWS LOOP
-
-    //From Slider
-    randomShows.map((v) => {
-      document.querySelector(".show-d-" + v.id).addEventListener("click", (e) => {
-        e.preventDefault();
-        //console.log(v.id);
-        GetSingleShowDetails(v.id);
-      });
-    });
- }
- else
- {
-
- }
-}
- 
-searchBTN.addEventListener('click', (e) => {
-    e.preventDefault();
-    
-    if(searchValue.value.length > 0 && searchValue.value != "")
-    {
-         SearchShow(searchValue.value);
-    }
-    else
-    {
-      messages.innerHTML = `
-          <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
-          <div id="liveToast" class="toast hide toast-warning" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="toast-header">
-            <span class="toast-warning-icon"><i class="bi bi-exclamation-triangle-fill"></i></span>
-              <strong class="me-auto toast-title">Warning</strong>
-              <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-            </div>
-            <div class="toast-body">
-              <i class="bi bi-arrow-return-right"></i> Please enter movie name
-            </div>
+  showsHeaderContainer.innerHTML = randomShows
+    .map((s) => `
+      <div class="slide-item">
+        <a href="#" class="card show-card" data-show-id="${s.id}" aria-label="${escapeHTML(s.name)} — view details">
+          <div class="poster">
+            <img src="${escapeHTML(s.image.medium || s.image.original)}" alt="">
           </div>
-        </div>
-      `;
+          <div class="card-body">
+            <span class="show-title" title="${escapeHTML(s.name)}">${escapeHTML(s.name)}</span>
+            ${starsHTML(s.rating.average)}
+          </div>
+        </a>
+      </div>`)
+    .join("");
 
-      RunToast();
-    }
-   
-});
+  InitSlider();
+};
+
+const LoadShowsData = async () => {
+  try {
+    const shows = await fetchJSON(`${API}/shows`);
+    DisplayShowsData(shows || []);
+  } catch (err) {
+    showsHeaderContainer.innerHTML = `
+      <div class="alert alert-danger d-flex align-items-center gap-2 mb-0" role="alert">
+        <i class="bi bi-x-circle-fill" aria-hidden="true"></i>
+        <div>Could not load popular shows. Please refresh the page to try again.</div>
+      </div>`;
+    DisplayError(err);
+  } finally {
+    HidePreloader();
+  }
+};
+
+/*---------------------------------------------------------------------------------------------------------
+  Search
+---------------------------------------------------------------------------------------------------------*/
+const SetSearching = (isSearching) => {
+  searchBTN.disabled = isSearching;
+  searchBTN.querySelector(".spinner-border").classList.toggle("hidden", !isSearching);
+};
 
 const SearchShow = async (query) => {
-    let searchOption = Array.from(document.getElementsByName("search-options")).find(r => r.checked).value;
-    let TVMAZE_SEARCH_SHOW = "";
+  const searchOption = document.querySelector('input[name="search-options"]:checked').value;
+  const q = encodeURIComponent(query);
+  const url = searchOption === "single" ? `${API}/singlesearch/shows?q=${q}` : `${API}/search/shows?q=${q}`;
 
-    if(searchOption === "single")
-    {
-      TVMAZE_SEARCH_SHOW = `https://api.tvmaze.com/singlesearch/shows?q=${query}`
-    }
-    else
-    {
-      TVMAZE_SEARCH_SHOW = `https://api.tvmaze.com/search/shows?q=${query}`;
-    }
+  SetSearching(true);
+  try {
+    let showData = await fetchJSON(url);
+    if (searchOption === "single" && showData != null) showData = [{ show: showData }];
+    DisplayShowsFromSearch(showData, query);
+  } catch (err) {
+    DisplayError(err);
+  } finally {
+    SetSearching(false);
+  }
+};
 
-    try
-    {
-        const res = await fetch(TVMAZE_SEARCH_SHOW);
-        let showData = await res.json();
+const DisplayShowsFromSearch = (showData, query) => {
+  if (!showData || showData.length === 0) {
+    showsList.innerHTML = "";
+    resultsTitle.classList.add("hidden");
+    clearBTN.classList.add("hidden");
+    ShowToast("warning", `No results found for <b>${escapeHTML(query)}</b>.`);
+    return;
+  }
 
-        if(searchOption === "single" && showData != null)
-        {
-          let singleData = [];
-          singleData.push({"show" : showData});
+  resultsTitle.innerHTML = `${showData.length} result${showData.length === 1 ? "" : "s"} for “${escapeHTML(query)}”`;
+  resultsTitle.classList.remove("hidden");
 
-          showData = singleData;      
-        }
-
-        DisplayShowsFromSearch(showData);       
-    }
-    catch(err)
-    {
-        console.error(err);
-
-        DisplayError(err);
-    }
-}
-
-DisplayShowsFromSearch = (showData) => {
-    let clearBTN = document.querySelector("#clear-search");
-
-    if(showData != null && showData.length > 0)
-    {
-        showsList.innerHTML = "";
-
-        showData.map((s) => {
-
-            let showImage = "";
-            let showName = s.show.name;
-            let trimmedShowName = showName.substr(0, 17) + "...";
-            let trimmedSummary = (s.show.summary != null) ? (s.show.summary.substr(0, 55) + "...") : "";
-
-            if(s.show.image != null)
-            {
-                showImage = s.show.image.original;
-            }
-            else
-            {
-                showImage = "/img/no-img-available.png";
-            }
-           
-            showsList.innerHTML += `
-                <div class="col-md-3">
-                  <div class="card show-d-${s.show.id} card-show-list">
-                    <a href="#">
-                        <img src="${showImage}" style="height:300px" class="card-img-top" alt="${showName} Image">
-                        <div class="card-body">
-                          <h5 class="card-title">${(showName.length < 14) ? showName : trimmedShowName}</h5>
-                         
-                          ${trimmedSummary.length > 0 ? `<hr/>${trimmedSummary}` : ""}
-                        </div>
-                    </a>                 
-                  </div>
-                </div>
-            `;
-            
-            //Show Clear button
-            clearBTN.classList.remove("hidden");
-
-            clearBTN.addEventListener('click', (e) => {
-              e.preventDefault();
-
-              showsList.innerHTML = "";
-              searchValue.value = "";
-              clearBTN.classList.add("hidden");
-            });
-        });
-
-        showData.map((v) => {
-          document.querySelector(".show-d-" + v.show.id).addEventListener("click", (e) => {
-            e.preventDefault();
-            //console.log(v.show.id);
-            GetSingleShowDetails(v.show.id);
-          });
-        });
-    }
-    else
-    {
-      showsList.innerHTML = "";
-
-      messages.innerHTML = `
-          <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
-          <div id="liveToast" class="toast hide" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="toast-header">
-            <span class="toast-warning-icon"><i class="bi bi-exclamation-triangle-fill"></i></span>
-              <strong class="me-auto toast-title">Warning</strong>
-              <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+  showsList.innerHTML = showData
+    .map(({ show }) => {
+      const image = show.image ? show.image.medium || show.image.original : NO_IMAGE;
+      const summary = stripHTML(show.summary);
+      const year = show.premiered ? show.premiered.slice(0, 4) : "";
+      return `
+        <div class="col">
+          <a href="#" class="card h-100 card-show-list" data-show-id="${show.id}">
+            <div class="poster">
+              <img src="${escapeHTML(image)}" alt="" loading="lazy">
+              ${show.rating?.average ? `<span class="poster-rating"><i class="bi bi-star-fill" aria-hidden="true"></i> ${show.rating.average}</span>` : ""}
             </div>
-            <div class="toast-body">
-              No results found for <b>${searchValue.value}</b>
+            <div class="card-body">
+              <h3 class="card-title h6" title="${escapeHTML(show.name)}">${escapeHTML(show.name)}</h3>
+              ${year || show.genres?.length ? `<p class="card-meta">${[year, ...(show.genres || []).slice(0, 2)].filter(Boolean).map(escapeHTML).join(" · ")}</p>` : ""}
+              ${summary ? `<p class="card-summary">${escapeHTML(summary)}</p>` : ""}
             </div>
-          </div>
-        </div>
-      `;
+          </a>
+        </div>`;
+    })
+    .join("");
 
-      RunToast();
-    }
-}
+  clearBTN.classList.remove("hidden");
+  resultsTitle.scrollIntoView({ behavior: "smooth", block: "start" });
+};
 
+searchForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const query = searchValue.value.trim();
 
-const DisplayShowDetailsModal = (data) => {
-    let showDetailsModal = document.querySelector(".modal-details");
-    let showImage = (data.image != null) ? data.image.original : null;
-    let genres = data.genres;
-    let status = "";
-    let schedule = data.schedule;
-    let country = (data.network != null) ? data.network.country.name : null;
-    let countryCode = (data.network != null) ? data.network.country.code : null;
-  
-    if(showImage == null)
-    {
-      showImage = "/img/no-img-available.png";
-    }
-
-    if(data.status == "Running")
-    {
-      status = `<span class="badge bg-success">${data.status}</span>`;
-    }
-    else if(data.status == "To Be Determined")
-    {
-      status = `<span class="badge bg-warning text-dark">${data.status}</span>`;
-    }
-    else
-    {
-      status = `<span class="badge bg-danger">${data.status}</span>`;
-    }
-
-    showDetailsModal.innerHTML = `      
-    <!-- Modal -->
-    <div class="modal fade" id="detail" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content">
-          <div class="modal-header bg-dark text-white">
-            <h5 class="modal-title" id="exampleModalLabel">${data.name}</h5>
-            <button type="button" class="btn-close btn-close-modal" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-              <div class="row">
-                  <div class="col-md-5 bg-dark text-white p-3">
-                    <div class="card" >
-                      <img src="${showImage}" class="card-img-top" alt="${data.name} Image">                    
-                    </div>
-                    <div class="genres mt-3">                    
-                    </div>
-                  </div>
-                  <div class="col-md-7 modal-show-info bg-dark text-white p-3">
-                      <b>Status:</b> ${(data.status != null) ? status : "No Status Available"}
-                      <hr/>
-                      <b>Language:</b> ${(data.language != null) ? data.language : "No Language Available"}
-                      <hr/>
-                      <b>Premiered:</b> ${(data.premiered != null) ? data.premiered : "No Date Available"}
-                      <hr/>
-                      <b>Rating:</b> ${(data.rating.average != null) ? data.rating.average : "No Rating Available"}
-                      <hr/>
-                      <b>Runtime:</b> ${(data.runtime != null) ? data.runtime + " min" : "No Runtime Available"}
-
-                      ${(country != null) ? `<hr/><b>Country:</b> <img src="https://flagcdn.com/w160/${countryCode.toLowerCase()}.png" style="width:30px;"/> ${country}` : ""}
-                      ${(data.officialSite != null) ? `<hr/><b>Official Site:</b> <a href="${data.officialSite}" target="_blank"><i class="bi bi-arrow-up-right-square-fill"></i><a/>` : ""}
-                  </div>
-                  <div class="col-md-12 mt-3 schedule-accordion">
-                      <div class="show-list">
-                          <div class="accordion accordion-flush" id="accordionShowDetails">
-                            <div class="accordion-item">
-                              <h2 class="accordion-header" id="flush-headingOne">
-                                <button class="accordion-button collapsed bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#flush-collapseOne" aria-expanded="false" aria-controls="flush-collapseOne">
-                                   <b>Schedule</b>
-                                </button>
-                              </h2>
-                              <div id="flush-collapseOne" class="accordion-collapse collapse" aria-labelledby="flush-headingOne" data-bs-parent="#accordionShowDetails">
-                                <div class="accordion-body">
-                                    <table class="table">
-                                        <thead>
-                                          <tr>
-                                            <th scope="col">Days</th>
-                                            <th scope="col">Time</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                         
-                                        </tbody>
-                                    </table>
-                                </div>
-                              </div>
-                            </div>                                             
-                          </div>
-                      </div>
-                  </div>
-                  <div class="col-md-12 mt-3">
-                      ${
-                        data.summary != null ? `<div class="p-3 mb-2 bg-dark text-white">${data.summary}</div>` : ""
-                      }
-                  </div>
-                  <div class="col-md-12 mt-3 bg-dark text-white">
-                      <h3 class="pt-2 px-3 modal-shows-images-h">Images <span></span></h3>
-                      <hr/>
-                      <div class="modal-shows-images p-4 pt-1">
-                      </div>
-                  </div>
-              </div>            
-          </div>
-          <div class="modal-footer bg-dark text-white">
-            <button type="button" class="btn btn-light" id="add-to-favorite" value="add"><i class="bi bi-heart" style="color:red;"></i></button>
-          </div>
-        </div>
-      </div>
-    </div>
-    `;
-    ExistInFavoriteList(data.id);
-    ShowImagesCarousel(data.id);
-                      
-    let showGenres = document.querySelector(".modal-details .genres");
-    let showSchedule = document.querySelector(".modal-details .table tbody");
-    let scheduleAccordion = document.querySelector(".schedule-accordion");
-
-    const addToFavoriteBTN = document.querySelector("#add-to-favorite");
-
-    document.querySelector(".modal .modal-content").style.backgroundImage = `url(${showImage})`;
-    document.querySelector(".modal .btn-close").style.backgroundColor = "red";
-
-    genres.map((g) => {showGenres.innerHTML += `<span class="badge rounded-pill bg-info text-dark">${g}</span>`;});
-    
-    if(schedule.days.length > 0)
-    {
-      schedule.days.map((d) => {
-        showSchedule.innerHTML += `
-          <tr>
-              <td>${(schedule.days.length > 0) ? d : "No Day Available"}</td>
-              <td>${(schedule.time != "") ? schedule.time : "No Time Available"}</td>
-          </tr>
-        `;     
-      });
-    }
-    else
-    {
-      scheduleAccordion.parentNode.removeChild(scheduleAccordion);
-    }
-   
-    addToFavoriteBTN.addEventListener("click", (e) => {
-      //e.preventDefault();
-
-      let existingLocalS = localStorage.getItem("fav");
-
-      if(addToFavoriteBTN.value === "add")
-      {
-       
-        let favorite = [{"id" : data.id, "name" : data.name, "image" : data.image}];
-      
-        if(existingLocalS == null)
-        {
-          localStorage.setItem("fav", JSON.stringify(favorite));
-        }
-        else
-        {
-          favorite = {"id" : data.id, "name" : data.name, "image" : data.image};
-          existingLocalS = existingLocalS ? JSON.parse(existingLocalS) : {};
-  
-          existingLocalS.push(favorite);
-  
-          const ids = existingLocalS.map(o => o.id);
-          const unique = existingLocalS.filter(({id}, index) => !ids.includes(id, index + 1));
-  
-          localStorage.setItem("fav", JSON.stringify(unique));      
-        }
-        
-        ExistInFavoriteList(data.id, addToFavoriteBTN.value, data.name);
-      }
-      else if(addToFavoriteBTN.value === "remove")
-      {
-        RemoveFromFavoriteList(data.id);
-      }
-   
-    });
-    
-    new bootstrap.Modal(document.querySelector("#detail"), {focus: false}).show();
-}
-
-const RemoveFromFavoriteList = (id) => {
-  let existingLocalS = localStorage.getItem("fav");
-  let favList = JSON.parse(existingLocalS);
-
-  if(favList.length > 0)
-  {
-    for(let i = 0; i < favList.length; i++)
-    {    
-      if (favList[i].id === id) { 
-
-          favList.splice(i, 1); 
-      }   
-    }
-    localStorage.setItem("fav", JSON.stringify(favList));
-    ExistInFavoriteList(id, "remove");  
+  if (query.length > 0) {
+    SearchShow(query);
+  } else {
+    ShowToast("warning", "Please enter a show name.");
+    searchValue.focus();
   }
-}
+});
 
-const ExistInFavoriteList = (showID, action, showName) => {
-  let existingLocalS = localStorage.getItem("fav");
- 
-  if(existingLocalS != null)
-  {
-    let favoriteList = JSON.parse(existingLocalS);
-    let ids = favoriteList.map(i => i.id);
+clearBTN.addEventListener("click", () => {
+  showsList.innerHTML = "";
+  resultsTitle.classList.add("hidden");
+  searchValue.value = "";
+  clearBTN.classList.add("hidden");
+  searchValue.focus();
+});
 
-    if(ids.includes(showID))
-    {
-      document.querySelector("#add-to-favorite").value = "remove";
-      document.querySelector("#add-to-favorite").innerHTML = '<i class="bi bi-heart-fill" style="color:red;"></i>';
+// One delegated listener for every show card (slider + search results)
+document.addEventListener("click", (e) => {
+  const card = e.target.closest("[data-show-id]");
+  if (!card) return;
+  e.preventDefault();
+  GetSingleShowDetails(Number(card.dataset.showId));
+});
 
-      if(action === "add")
-      {
-        messages.innerHTML = `
-          <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
-            <div id="liveToast" class="toast hide toast-success" role="alert" aria-live="assertive" aria-atomic="true">
-              <div class="toast-header">
-              <span class="toast-success-icon" style="margin-right:5px;"><i class="bi bi-check-circle-fill"></i></span>
-                <strong class="me-auto toast-title"> Success</strong>
-                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-              </div>
-              <div class="toast-body">
-                <i class="bi bi-arrow-return-right"></i> <span><b>${showName}</b> added to your favorite list.<span/>
-              </div>
-            </div>
-          </div>
-        `;
-        RunToast();
-      }
-    }
-    else
-    {
-      let add = document.querySelector("#add-to-favorite");
-
-      if(add != null)
-      {
-        document.querySelector("#add-to-favorite").value = "add";
-        document.querySelector("#add-to-favorite").innerHTML = '<i class="bi bi-heart" style="color:red;"></i>';
-      }      
-    }
-  }
-  CheckFavoriteList();
-}
-
-const CheckFavoriteList = () => {
-  let favorites = localStorage.getItem("fav");
-  let notificationBTN = document.querySelector("#notification-btn");
-  let notificationCount = document.querySelector(".notification-count");
-  let offcanvasCard = document.querySelector(".offcanvas-card");
-
-  if(favorites != null)
-  {
-    let favoriteList = JSON.parse(favorites);
-    offcanvasCard.innerHTML = "";
-
-    favoriteList.map((fd) => {
-        let showImage = (fd.image != null) ? fd.image.original : null;
-
-        if(showImage == null)
-        {
-          showImage = "/img/no-img-available.png";
-        }
-
-        offcanvasCard.innerHTML += `
-        <div class="card">
-          <div class="card-body bg-dark text-white d-flex justify-content-end">        
-            <span class="remove-${fd.id}" style="color:red; cursor:pointer;"><i class="bi bi-x-circle"></i></span>
-          </div>
-            <a href="#" id="show-${fd.id}" style="text-decoration:none;">
-              <img src="${showImage}" class="card-img-top" alt="${fd.name} Image">         
-              <div class="card-body bg-dark text-white">
-                <h5 class="card-title">${fd.name}</h5>
-              </div>
-            </a>               
-        </div>
-        <hr/>
-        `;
-    });
-    
-    favoriteList.map((i) => {
-      document.querySelector("#show-" + i.id).addEventListener("click", (e) => {
-        //e.preventDefault();
-        GetSingleShowDetails(i.id);
-      });
-
-      document.querySelector(".remove-" + i.id).addEventListener("click", (e) => {
-        RemoveFromFavoriteList(i.id);
-      });
-    });
-
-    if(favoriteList.length > 0)
-    {
-      notificationBTN.classList.remove("hidden");
-      notificationCount.innerText = favoriteList.length;
-    }
-    else
-    {
-      notificationBTN.classList.add("hidden");
-    }
-    
-  }
-  else
-  {
-    notificationBTN.classList.add("hidden");
-    offcanvasCard.innerHTML = "";
-  }
-}
-CheckFavoriteList();
-
+/*---------------------------------------------------------------------------------------------------------
+  Show details modal
+---------------------------------------------------------------------------------------------------------*/
 const GetSingleShowDetails = async (id) => {
-    const SHOW_MAIN_INFORMATIN = `https://api.tvmaze.com/shows/${id}`;
-   
-    try
-    {
-        const res = await fetch(SHOW_MAIN_INFORMATIN);
-        const showsData = await res.json();
-        
-        DisplayShowDetailsModal(showsData);
-    }
-    catch(err)
-    {
-        console.error(err);
-
-        DisplayError(err);
-    }
-}
-
-//Show's Carousel Images
-const ShowImagesCarousel = async (id) => {
-  const SHOW_IMAGES = `https://api.tvmaze.com/shows/${id}/images`;
-
-  try
-  {
-    const res = await fetch(SHOW_IMAGES);
-    const showImagesData = await res.json();
-
-    let showImagesContainer = document.querySelector(".modal-shows-images");
-
-    if(showImagesData != null && showImagesData.length > 0)
-    {
-      let pos = 0;
-      //console.log(showImagesData);
-      showImagesContainer.innerHTML = `
-            <div id="carouselImagesIndicators" class="carousel slide" data-bs-ride="carousel">
-              
-                <div class="carousel-show-images carousel-inner">
-                  
-                </div>
-                <button class="carousel-control-prev" type="button" data-bs-target="#carouselImagesIndicators" data-bs-slide="prev">
-                  <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-                  <span class="visually-hidden">Previous</span>
-                </button>
-                <button class="carousel-control-next" type="button" data-bs-target="#carouselImagesIndicators" data-bs-slide="next">
-                  <span class="carousel-control-next-icon" aria-hidden="true"></span>
-                  <span class="visually-hidden">Next</span>
-                </button>
-            </div>
-      `;
-
-      let carouselInner = document.querySelector(".carousel-show-images");
-      let imagesCount = document.querySelector(".modal-shows-images-h span");
-      imagesCount.innerText = `(${showImagesData.length})`;
-
-      showImagesData.map((i) => {
-        let original = i.resolutions.original.url;
-       
-        carouselInner.innerHTML += `
-            <div class="carousel-item ${(pos == 0) ? "active" : ""}">
-                <img src="${original}" style="height:550px;" class="d-block w-100 img-thumbnail" alt="...">
-            </div>
-        `;
-        pos++;
-      });
-    }
-  }
-  catch(err)
-  {
-    console.error(err);
-
+  try {
+    const show = await fetchJSON(`${API}/shows/${id}`);
+    if (!show) throw new Error("Show not found.");
+    DisplayShowDetailsModal(show);
+  } catch (err) {
     DisplayError(err);
   }
-}
+};
 
-//Clear Favorite List
-document.querySelector(".clear-fav-list").addEventListener("click", (e) => {
-  if(confirm("Do you want to clear your list?"))
-  {
-    localStorage.removeItem("fav");
-    ExistInFavoriteList();
-  } 
+const StatusBadge = (status) => {
+  if (!status) return `<span class="text-white-50">Not available</span>`;
+  const cls = status === "Running" ? "bg-success" : status === "To Be Determined" || status === "In Development" ? "bg-warning text-dark" : "bg-danger";
+  return `<span class="badge ${cls}">${escapeHTML(status)}</span>`;
+};
+
+const DisplayShowDetailsModal = (data) => {
+  currentShow = data;
+  const image = data.image ? data.image.original : NO_IMAGE;
+  const network = data.network || data.webChannel;
+  const country = network?.country;
+  const officialSite = safeUrl(data.officialSite);
+  const na = `<span class="text-white-50">Not available</span>`;
+  const schedule = data.schedule || { days: [], time: "" };
+
+  const info = [
+    ["Status", StatusBadge(data.status)],
+    ["Language", data.language ? escapeHTML(data.language) : na],
+    ["Premiered", data.premiered ? escapeHTML(data.premiered) : na],
+    data.ended ? ["Ended", escapeHTML(data.ended)] : null,
+    ["Rating", data.rating?.average != null ? `<i class="bi bi-star-fill text-warning" aria-hidden="true"></i> ${data.rating.average} / 10` : na],
+    ["Runtime", data.runtime || data.averageRuntime ? `${data.runtime || data.averageRuntime} min` : na],
+    network ? ["Network", escapeHTML(network.name)] : null,
+    country
+      ? ["Country", `<img src="https://flagcdn.com/w40/${escapeHTML(country.code.toLowerCase())}.png" class="flag" alt="" width="24" height="16"> ${escapeHTML(country.name)}`]
+      : null,
+    officialSite
+      ? ["Official site", `<a href="${escapeHTML(officialSite)}" target="_blank" rel="noopener">Visit <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a>`]
+      : null,
+  ].filter(Boolean);
+
+  modalTitle.textContent = data.name;
+  modalEl.querySelector(".modal-content").style.setProperty("--detail-bg", `url("${image}")`);
+
+  modalBody.innerHTML = `
+    <div class="row g-3">
+      <div class="col-sm-5 col-md-4">
+        <img src="${escapeHTML(image)}" class="detail-poster" alt="${escapeHTML(data.name)} poster">
+        ${data.genres?.length ? `<div class="genres mt-3">${data.genres.map((g) => `<span class="badge rounded-pill">${escapeHTML(g)}</span>`).join("")}</div>` : ""}
+      </div>
+      <div class="col-sm-7 col-md-8">
+        <dl class="modal-show-info">
+          ${info.map(([k, v]) => `<div class="info-row"><dt>${k}</dt><dd>${v}</dd></div>`).join("")}
+        </dl>
+      </div>
+      ${data.summary ? `<div class="col-12"><div class="detail-panel summary">${sanitizeHTML(data.summary)}</div></div>` : ""}
+      ${schedule.days.length > 0
+        ? `<div class="col-12">
+            <div class="detail-panel">
+              <h3 class="h6 detail-panel-title"><i class="bi bi-calendar-week" aria-hidden="true"></i> Schedule</h3>
+              <table class="table table-dark table-sm mb-0">
+                <thead><tr><th scope="col">Day</th><th scope="col">Time</th></tr></thead>
+                <tbody>
+                  ${schedule.days.map((d) => `<tr><td>${escapeHTML(d)}</td><td>${schedule.time ? escapeHTML(schedule.time) : "—"}</td></tr>`).join("")}
+                </tbody>
+              </table>
+            </div>
+          </div>`
+        : ""}
+      <div class="col-12 images-col hidden">
+        <div class="detail-panel">
+          <h3 class="h6 detail-panel-title modal-shows-images-h"><i class="bi bi-images" aria-hidden="true"></i> Images <span></span></h3>
+          <div class="modal-shows-images"></div>
+        </div>
+      </div>
+    </div>`;
+
+  UpdateFavoriteButton();
+  ShowImagesCarousel(data.id);
+
+  // Opening from the favorites panel: close it so the modal is not stacked on top of it
+  bootstrap.Offcanvas.getInstance(offcanvasEl)?.hide();
+  detailModal.show();
+  modalBody.scrollTop = 0;
+};
+
+const ShowImagesCarousel = async (id) => {
+  try {
+    const images = await fetchJSON(`${API}/shows/${id}/images`);
+    // Ignore late responses for a show that is no longer displayed
+    if (!images || images.length === 0 || currentShow?.id !== id) return;
+
+    const container = modalBody.querySelector(".modal-shows-images");
+    modalBody.querySelector(".modal-shows-images-h span").textContent = `(${images.length})`;
+    modalBody.querySelector(".images-col").classList.remove("hidden");
+
+    const items = images
+      .map((img, pos) => {
+        const res = img.resolutions;
+        const src = (res.medium || res.original).url;
+        return `
+          <div class="carousel-item ${pos === 0 ? "active" : ""}">
+            <img src="${escapeHTML(src)}" class="d-block" alt="${escapeHTML(currentShow.name)} image ${pos + 1} of ${images.length}" ${pos > 0 ? 'loading="lazy"' : ""}>
+          </div>`;
+      })
+      .join("");
+
+    container.innerHTML = `
+      <div id="carouselImagesIndicators" class="carousel slide">
+        <div class="carousel-inner">${items}</div>
+        ${images.length > 1
+          ? `<button class="carousel-control-prev" type="button" data-bs-target="#carouselImagesIndicators" data-bs-slide="prev">
+              <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+              <span class="visually-hidden">Previous</span>
+            </button>
+            <button class="carousel-control-next" type="button" data-bs-target="#carouselImagesIndicators" data-bs-slide="next">
+              <span class="carousel-control-next-icon" aria-hidden="true"></span>
+              <span class="visually-hidden">Next</span>
+            </button>`
+          : ""}
+      </div>`;
+  } catch (err) {
+    console.error(err); // images are optional — fail quietly
+  }
+};
+
+/*---------------------------------------------------------------------------------------------------------
+  Favorites (stored in localStorage under "fav")
+---------------------------------------------------------------------------------------------------------*/
+const GetFavorites = () => {
+  try {
+    const list = JSON.parse(localStorage.getItem(FAV_KEY));
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+};
+
+const SaveFavorites = (list) => {
+  try {
+    if (list.length > 0) localStorage.setItem(FAV_KEY, JSON.stringify(list));
+    else localStorage.removeItem(FAV_KEY);
+  } catch (err) {
+    DisplayError(new Error("Could not save favorites in this browser."));
+  }
+  RenderFavorites();
+  UpdateFavoriteButton();
+};
+
+const IsFavorite = (id) => GetFavorites().some((f) => f.id === id);
+
+const AddToFavoriteList = (show) => {
+  const list = GetFavorites().filter((f) => f.id !== show.id);
+  list.push({ id: show.id, name: show.name, image: show.image });
+  SaveFavorites(list);
+  ShowToast("success", `<b>${escapeHTML(show.name)}</b> was added to your favorites.`);
+};
+
+const RemoveFromFavoriteList = (id) => {
+  SaveFavorites(GetFavorites().filter((f) => f.id !== id));
+};
+
+const UpdateFavoriteButton = () => {
+  if (!currentShow) return;
+  const fav = IsFavorite(currentShow.id);
+  addToFavoriteBTN.value = fav ? "remove" : "add";
+  addToFavoriteBTN.setAttribute("aria-pressed", String(fav));
+  addToFavoriteBTN.innerHTML = fav
+    ? '<i class="bi bi-heart-fill text-danger" aria-hidden="true"></i> In favorites'
+    : '<i class="bi bi-heart text-danger" aria-hidden="true"></i> Add to favorites';
+};
+
+addToFavoriteBTN.addEventListener("click", () => {
+  if (!currentShow) return;
+  if (addToFavoriteBTN.value === "add") AddToFavoriteList(currentShow);
+  else RemoveFromFavoriteList(currentShow.id);
 });
 
-/**************Trailers******************/
+const RenderFavorites = () => {
+  const favorites = GetFavorites();
+  const notificationBTN = document.querySelector("#notification-btn");
+  const offcanvasCard = document.querySelector(".offcanvas-card");
+  const clearFavBTN = document.querySelector(".clear-fav-list");
+
+  notificationBTN.classList.toggle("hidden", favorites.length === 0);
+  document.querySelector(".notification-count").textContent = favorites.length;
+  clearFavBTN.classList.toggle("hidden", favorites.length === 0);
+
+  if (favorites.length === 0) {
+    offcanvasCard.innerHTML = `
+      <li class="fav-empty text-center">
+        <i class="bi bi-heart" aria-hidden="true"></i>
+        <p class="mb-0">No favorites yet. Open a show and tap “Add to favorites”.</p>
+      </li>`;
+    return;
+  }
+
+  offcanvasCard.innerHTML = favorites
+    .map((fd) => {
+      const image = fd.image ? fd.image.medium || fd.image.original : NO_IMAGE;
+      return `
+        <li class="fav-item">
+          <a href="#" class="fav-link" data-show-id="${fd.id}">
+            <img src="${escapeHTML(image)}" alt="" loading="lazy">
+            <span class="fav-name">${escapeHTML(fd.name)}</span>
+          </a>
+          <button type="button" class="btn btn-sm btn-outline-danger fav-remove" data-remove-id="${fd.id}" aria-label="Remove ${escapeHTML(fd.name)} from favorites">
+            <i class="bi bi-x-lg" aria-hidden="true"></i>
+          </button>
+        </li>`;
+    })
+    .join("");
+};
+
+document.querySelector(".offcanvas-card").addEventListener("click", (e) => {
+  const removeBtn = e.target.closest("[data-remove-id]");
+  if (removeBtn) RemoveFromFavoriteList(Number(removeBtn.dataset.removeId));
+});
+
+document.querySelector(".clear-fav-list").addEventListener("click", () => {
+  if (confirm("Do you want to clear your favorites list?")) SaveFavorites([]);
+});
+
+// Keep several open tabs in sync
+window.addEventListener("storage", (e) => {
+  if (e.key === FAV_KEY || e.key === null) {
+    RenderFavorites();
+    UpdateFavoriteButton();
+  }
+});
+
+/*---------------------------------------------------------------------------------------------------------
+  Trailer
+---------------------------------------------------------------------------------------------------------*/
 const newMovieTrailers = [
-                            "https://www.youtube.com/embed/mqqft2x_Aa4",
-                            "https://www.youtube.com/embed/yDDw4AG-TX8",
-                            "https://www.youtube.com/embed/GBNKXNLm6ug",
-                            "https://www.youtube.com/embed/CwpHlcb0G2s",
-                            "https://www.youtube.com/embed/aJACneSF580",
-                            "https://www.youtube.com/embed/cOv3Hk-6kt8"
-                         ];
+  "mqqft2x_Aa4",
+  "yDDw4AG-TX8",
+  "GBNKXNLm6ug",
+  "CwpHlcb0G2s",
+  "aJACneSF580",
+  "cOv3Hk-6kt8",
+];
+document.querySelector("#trailer").src = `https://www.youtube-nocookie.com/embed/${shuffle(newMovieTrailers)[0]}?rel=0`;
 
-let trailerIFRAME = document.querySelector("#trailer");                         
-let randomTrailer = newMovieTrailers.sort(() => Math.random() - Math.random()).slice(0, 1);
+/*---------------------------------------------------------------------------------------------------------
+  Preloader & init
+---------------------------------------------------------------------------------------------------------*/
+const HidePreloader = () => {
+  preloader.classList.add("is-hidden");
+  preloader.addEventListener("transitionend", () => preloader.remove(), { once: true });
+  setTimeout(() => preloader.remove(), 800); // fallback if transitions are disabled
+};
+setTimeout(HidePreloader, 8000); // never keep the user waiting on a slow API
 
-trailerIFRAME.src = randomTrailer + "?autoplay=0";
-/*************Trailers END***************/
-
-
-const DisplayError = ((err) => {
-  messages.innerHTML = `
-  <div class="alert alert-danger d-flex align-items-center" role="alert">
-  <i class="bi bi-x-circle-fill" style="padding-right:10px"></i>
-    <div>
-      ${err}
-    </div>
-  </div>
-`;
-});
-
-const RunToast = (() => {
-    let option = { animation : true, delay : 9000,  autohide : true};
-
-    var toastElList = [].slice.call(document.querySelectorAll('.toast'));
-    var toastList = toastElList.map(function (toastEl) {
-      return new bootstrap.Toast(toastEl, option).show();
-    });
-});
-
-let preloader = document.querySelector(".preloader");
-window.addEventListener("load", () => {  
-  setTimeout(function(){ preloader.style.display = "none"; }, 1000);
-})
-  
-
+RenderFavorites();
+LoadShowsData();
